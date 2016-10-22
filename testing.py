@@ -2,6 +2,8 @@ from Crypto.Cipher import AES
 import time
 
 JITTER = 0
+WINDOW = 0
+TIME_SLOTS = 1000
 
 N_0 = '1234567890123456'
 K   = '9876543210123456'
@@ -11,9 +13,9 @@ delays = []
 
 
 ni = N_0
-for _ in range(1000):
+for _ in range(10000):
     ni = E.encrypt(ni)
-    delays.append(int.from_bytes(ni, byteorder="little") % 128)
+    delays.append(int.from_bytes(ni, byteorder="little") % TIME_SLOTS)
 
 
 class Message:
@@ -40,7 +42,7 @@ class Client:
         self.i = self.i + 1
         return delays[self.i]
 
-    def sendReply(self, sender, t = -1, danger = False):
+    def sendReply(self, sender, t = -1, danger = False, message="Ping"):
 
         if t == -1:
             t = self.time
@@ -49,7 +51,7 @@ class Client:
         nextDelay = self.next_delay()
         self.expectedResponse = t + delay + nextDelay
         self.warningResponse = t + delay + nextDelay/2
-        response = Message(self, sender, t + (delay/2 if danger else delay), "Ping")
+        response = Message(self, sender, t + (delay/2 if danger else delay), message)
         self.outbox.append(response)
 
     def addMessage(self, m):
@@ -66,11 +68,11 @@ class Client:
             self.sendReply(m.sender, t=self.expectedResponse)
         elif(t == self.warningResponse):
             print("Danger Will Robinson")
-            self.sendReply(m.sender, t=self.expectedResponse)
+            self.sendReply(m.sender, t=self.expectedResponse, message="DWR")
         else:
             print("Bad Message")
             print(t, self.expectedResponse)
-            self.sendReply(m.sender, t=self.expectedResponse)#, danger=True)
+            self.sendReply(m.sender, t=self.expectedResponse, message="Bad")#, danger=True)
 
 
     def checkForMessage(self):
@@ -93,11 +95,11 @@ class Client:
 Alice = Client("Alice")
 Bob = Client("Bob")
 
+Trudy = Client("Trudy")
+
 Alice.inbox.append(Message(Bob, Alice, 0, "Startup"))
 Bob.expectedResponse = Bob.next_delay()
 
-
-print(delays[1:5])
 
 def sim_loop():
 

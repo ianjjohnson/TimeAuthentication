@@ -88,6 +88,7 @@ class Client:
                 type_II_count
             #print(t, self.expectedResponse)
             #self.sendReply(m.sender, t=self.expectedResponse, message="DWR")#, danger=True)
+        #elif(m.sender.name == "Trudy"):
 
 
     def checkForMessage(self):
@@ -124,7 +125,8 @@ typeIIs = []
 sent = []
 windows = []
 
-for i in range(0,1010, 10):
+for i in range(0,110,10):
+
 
     delays = []
 
@@ -154,10 +156,10 @@ for i in range(0,1010, 10):
     #print(type_I_count, type_II_count, sent_count)
     typeIs.append(type_I_count)
     typeIIs.append(type_II_count)
-    sent.append(sent_count)
+    sent.append(sent_count - len(Trudy.outbox))
     windows.append(WINDOW)
 
-f = open('data.txt', 'w')
+f = open('linearRange.txt', 'w')
 f.write("t1 <- c(")
 f.write(str(typeIs).strip('[]'))
 f.write(")\nt2 <- c(")

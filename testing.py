@@ -1,9 +1,14 @@
 from Crypto.Cipher import AES
 import time
+import random
 
 JITTER = 0
 WINDOW = 0
 TIME_SLOTS = 1000
+
+sent_count = 0
+type_I_count = 0
+type_II_count = 0
 
 N_0 = '1234567890123456'
 K   = '9876543210123456'
@@ -11,11 +16,6 @@ K   = '9876543210123456'
 E   = AES.new(K, AES.MODE_CFB, N_0)
 delays = []
 
-
-ni = N_0
-for _ in range(10000):
-    ni = E.encrypt(ni)
-    delays.append(int.from_bytes(ni, byteorder="little") % TIME_SLOTS)
 
 
 class Message:
@@ -50,7 +50,7 @@ class Client:
         delay = self.next_delay()
         nextDelay = self.next_delay()
         self.expectedResponse = t + delay + nextDelay
-        self.warningResponse = t + delay + nextDelay/2
+        self.warningResponse = int(t + delay + nextDelay/2)
         response = Message(self, sender, t + (delay/2 if danger else delay), message)
         self.outbox.append(response)
 
@@ -58,21 +58,36 @@ class Client:
         self.inbox.append(m)
 
     def handleMessage(self, m):
-        print(self.name, "got message: ", m.content)
-
+        #print(self.name, "got message: ", m.content)
+        global type_I_count
+        global type_II_count
+        global WINDOW
 
         t = (self.time-1 if (self.name == "Alice" and m.content != "Startup") else self.time)
 
-        if(t == self.expectedResponse):
-            print("Authenticated")
-            self.sendReply(m.sender, t=self.expectedResponse)
-        elif(t == self.warningResponse):
-            print("Danger Will Robinson")
-            self.sendReply(m.sender, t=self.expectedResponse, message="DWR")
-        else:
-            print("Bad Message")
-            print(t, self.expectedResponse)
-            self.sendReply(m.sender, t=self.expectedResponse, message="Bad")#, danger=True)
+
+        #if m.sender.name == "Trudy":
+        #    print(t, self.expectedResponse-WINDOW, self.expectedResponse+WINDOW)
+
+        if(t >= self.expectedResponse-WINDOW and t <= self.expectedResponse+WINDOW):
+            #print("Authenticated")
+            if(m.sender.name == "Trudy"):
+                type_I_count = type_I_count+1
+            else:
+                self.sendReply(m.sender, t=self.expectedResponse)
+
+        elif(t >= self.warningResponse-WINDOW and t <= self.warningResponse+WINDOW):
+            #print("Got Danger Will Robinson")
+            if(m.sender.name == "Trudy"):
+                type_I_count = type_I_count+1
+            else:
+                self.sendReply(m.sender, t=self.expectedResponse)
+
+        elif(self.name == "Alice"):
+            if m.sender.name == "Bob":
+                type_II_count
+            #print(t, self.expectedResponse)
+            #self.sendReply(m.sender, t=self.expectedResponse, message="DWR")#, danger=True)
 
 
     def checkForMessage(self):
@@ -92,20 +107,64 @@ class Client:
         self.time = self.time + 1
 
 
-Alice = Client("Alice")
-Bob = Client("Bob")
-
-Trudy = Client("Trudy")
-
-Alice.inbox.append(Message(Bob, Alice, 0, "Startup"))
-Bob.expectedResponse = Bob.next_delay()
-
 
 def sim_loop():
 
+    global sent_count
+
+    if(random.randint(1,10) == 1):
+        Trudy.outbox.append(Message(Trudy, Alice, Trudy.time+random.randint(1,TIME_SLOTS), "ATTACK"))
+        sent_count = sent_count+1
     Alice.update()
     Bob.update()
+    Trudy.update()
 
-while(True):
-    time.sleep(0.01)
-    sim_loop()
+typeIs = []
+typeIIs = []
+sent = []
+windows = []
+
+for i in range(0,1010, 10):
+
+    delays = []
+
+    sent_count = 0
+    type_I_count = 0
+    type_II_count = 0
+
+    Alice = Client("Alice")
+    Bob = Client("Bob")
+
+    Trudy = Client("Trudy")
+
+    ni = N_0
+    for _ in range(10000):
+        ni = E.encrypt(ni)
+        delays.append(int.from_bytes(ni, byteorder="little") % TIME_SLOTS + WINDOW)
+
+    Alice.inbox.append(Message(Bob, Alice, 0, "Startup"))
+    Bob.expectedResponse = Bob.next_delay()
+
+    WINDOW = i
+    print("Window is: ", i)
+
+    for _ in range(10000):
+        sim_loop()
+
+    #print(type_I_count, type_II_count, sent_count)
+    typeIs.append(type_I_count)
+    typeIIs.append(type_II_count)
+    sent.append(sent_count)
+    windows.append(WINDOW)
+
+f = open('data.txt', 'w')
+f.write("t1 <- c(")
+f.write(str(typeIs).strip('[]'))
+f.write(")\nt2 <- c(")
+f.write(str(typeIIs).strip('[]'))
+f.write(")\ns <- c(")
+f.write(str(sent).strip('[]'))
+f.write(")\nw<-c(")
+f.write(str(windows).strip('[]'))
+f.write(")")
+f.close()
